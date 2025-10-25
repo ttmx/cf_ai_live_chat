@@ -1,4 +1,22 @@
 {
+	"editor.codeActionsOnSave": {
+		"source.fixAll.eslint": "explicit"
+	},
+	"eslint.validate": [
+		"javascript",
+		"svelte",
+		"typescript"
+	],
+	"eslint.options": {},
+	"editor.defaultFormatter": "dbaeumer.vscode-eslint",
+	"eslint.format.enable": true,
+	"svelte.plugin.svelte.format.enable": false,
+	"editor.tabSize": 2,
+	"files.eol": "\n",
+	"[svelte]": {
+		"editor.defaultFormatter": "dbaeumer.vscode-eslint"
+	},
+	"editor.formatOnSave": true,
 	"files.associations": {
 		"wrangler.json": "jsonc"
 	}
