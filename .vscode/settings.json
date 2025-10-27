@@ -20,5 +20,7 @@
 	"files.associations": {
 		"wrangler.json": "jsonc"
 	},
-	"eslint.workingDirectories": ["./packages/durable-object", "./packages/web"]
+	"[jsonc]": {
+		"editor.defaultFormatter": "vscode.json-language-features"
+	},
 }

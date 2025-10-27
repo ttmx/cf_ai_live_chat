@@ -1,12 +1,9 @@
 {
   "name": "cf_ai_chat",
-  "type": "module",
-  "private": true,
-  "workspaces": ["packages/*"],
   "devDependencies": {
     "@types/bun": "latest"
   },
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"]
 }

@@ -1,5 +1,5 @@
 {
-	"name": "my-svelte-app",
+	"name": "cf-chat-app",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -41,5 +41,8 @@
 		"vite": "^7.1.7",
 		"vite-plugin-devtools-json": "^1.0.0",
 		"wrangler": "^4.45.0"
+	},
+	"dependencies": {
+		"ai": "^5.0.80"
 	}
 }

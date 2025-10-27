@@ -40,11 +40,30 @@
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
 	 */
 	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
-  "routes": [
-    {
-      "pattern": "ws-chat.tteles.dev",
-      "custom_domain": true
-    }
-  ],
-  "preview_urls": true
+	"routes": [
+		{
+			"pattern": "ws-chat.tteles.dev",
+			"custom_domain": true
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "WEBSOCKET_HIBERNATION_SERVER",
+				"class_name": "WebSocketHibernationServer"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"new_sqlite_classes": [
+				"WebSocketHibernationServer"
+			],
+			"tag": "v1"
+		}
+	],
+	"preview_urls": true
 }
