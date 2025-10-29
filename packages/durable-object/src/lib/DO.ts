@@ -1,13 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 import { ModelMessage, streamText } from 'ai';
-import { createWorkersAI } from 'workers-ai-provider';
+import { createWorkersAI, WorkersAI } from 'workers-ai-provider';
 
 type WSMessage = {
   type: 'history'
   messages: ModelMessage[];
   currentMessage: string | null;
-}|{
-  type: 'partial',
+}|{ type: 'partial',
   message: string;
 }| {
   type: 'end',
@@ -17,6 +16,9 @@ type WSMessage = {
 }| {
   type: 'user',
   message: string;
+}|{
+	type: 'userInfo';
+	count: number;
 }
 
 type UserWSMessage = {
@@ -32,6 +34,8 @@ export class WebSocketHibernationServer extends DurableObject {
 	currentBuffer: string | null = null;
 
 	sql: SqlStorage;
+
+	workersAI: WorkersAI;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -52,19 +56,52 @@ export class WebSocketHibernationServer extends DurableObject {
 		});
 		this.sql = ctx.storage.sql;
 
-		this.sql.exec(`
-    CREATE TABLE IF NOT EXISTS messages(
-    sequence    INTEGER PRIMARY KEY AUTOINCREMENT,
-    message     TEXT NOT NULL,
-    role       TEXT NOT NULL
-    );
-  `);
+		const workersAI = createWorkersAI({ binding: this.env.AI });
+		this.workersAI = workersAI;
 
-		// Sets an application level auto response that does not wake hibernated WebSockets.
-		this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+		this.setupTable();
 	}
 
-	async fetch(request: Request): Promise<Response> {
+	// DB ops
+	setupTable() {
+		this.sql.exec(`
+		CREATE TABLE IF NOT EXISTS messages(
+		sequence    INTEGER PRIMARY KEY AUTOINCREMENT,
+		message     TEXT NOT NULL,
+		role       TEXT NOT NULL
+		);
+	`);
+	}
+
+	addMessage(role: 'user' | 'assistant' | 'system', message: string) {
+		this.sql.exec(
+			'INSERT INTO messages (message, role) VALUES (?, ?);',
+			message,
+			role,
+		);
+	}
+
+	getMessageHistory(): ModelMessage[] {
+		return this
+			.sql.exec<{ message: string, role: 'user' | 'assistant' | 'system' }>(`SELECT message, role FROM messages ORDER BY sequence`)
+			.toArray().map(row => ({
+				content: row.message,
+				role: row.role,
+			}));
+	}
+
+	getHistory(): WSMessage {
+		const history : WSMessage = {
+			type: 'history',
+			messages: this.getMessageHistory(),
+			currentMessage: this.currentBuffer,
+		};
+		return history;
+	}
+
+	// WebSocket handlers
+
+	async fetch(_request: Request): Promise<Response> {
 		// Creates two ends of a WebSocket connection.
 		const webSocketPair = new WebSocketPair;
 		const [client, server] = Object.values(webSocketPair);
@@ -79,21 +116,10 @@ export class WebSocketHibernationServer extends DurableObject {
 		// WebSocket receives a message, the runtime will recreate the Durable Object
 		// (run the `constructor`) and deliver the message to the appropriate handler.
 		this.ctx.acceptWebSocket(server);
+		console.log('WebSocket connection accepted in DO');
 
 		// Generate a random UUID for the session.
 		const id = crypto.randomUUID();
-		const previousMessages: ModelMessage[] = this
-			.sql.exec<{ message: string, role: 'user' | 'assistant' | 'system' }>(`SELECT message, role FROM messages ORDER BY sequence`)
-			.toArray().map(row => ({
-				content: row.message,
-				role: row.role,
-			}));
-		const history: WSMessage = {
-			type: 'history',
-			messages: previousMessages,
-			currentMessage: this.currentBuffer,
-		};
-		server.send(JSON.stringify(history));
 
 		// Attach the session ID to the WebSocket connection and serialize it.
 		// This is necessary to restore the state of the connection when the Durable Object wakes up.
@@ -101,6 +127,15 @@ export class WebSocketHibernationServer extends DurableObject {
 
 		// Add the WebSocket connection to the map of active sessions.
 		this.sessions.set(server, { id });
+
+		const history = this.getHistory();
+		console.log('Sending history to client:', history);
+		server.send(JSON.stringify(history));
+		const userInfoMessage: WSMessage = {
+			type: 'userInfo',
+			count: this.sessions.size,
+		};
+		this.broadcastMessage(userInfoMessage);
 
 		return new Response(null, {
 			status: 101,
@@ -118,84 +153,68 @@ export class WebSocketHibernationServer extends DurableObject {
 			};
 			ws.send(JSON.stringify(endMessage));
 		}
-		// const session = this.sessions.get(ws)!;
-		const workersAI = createWorkersAI({ binding: this.env.AI });
+		const userMessage: UserWSMessage = JSON.parse(message.toString());
+		await this.submitUserMessage(userMessage.content);
+	}
 
-		// We won't do toolcalls so we can omit tool from TS type
-		const previousMessages: ModelMessage[] = this
-			.sql.exec<{ message: string, role: 'user' | 'assistant' | 'system' }>(`SELECT message, role FROM messages ORDER BY sequence`)
-			.toArray().map(row => ({
-				content: row.message,
-				role: row.role,
-			}));
-		this.sql.exec(
-			'INSERT INTO messages (message, role) VALUES (?, ?);',
-			message.toString(),
-			'user',
-		);
-		this.sessions.forEach((attachment, connectedWs) => {
-			const userMessage: WSMessage = {
-				type: 'user',
-				message: message.toString(),
-			};
-			connectedWs.send(JSON.stringify(userMessage));
+	async submitUserMessage(userMessage: string) {
+		// Insert user message into the database
+		this.addMessage('user', userMessage);
+
+		// Retrieve current messages
+		const currentMessages: ModelMessage[] = this.getMessageHistory();
+
+		// Notify all ws about the new user message
+		this.broadcastMessage({
+			type: 'user',
+			message: userMessage.toString(),
 		});
 
+		// Start generating the response
 		const response = streamText({
-			model: workersAI('@cf/meta/llama-3.1-8b-instruct-fp8', {
+			model: this.workersAI('@cf/meta/llama-3.1-8b-instruct-fp8', {
 				max_tokens: 500,
 				stream: true,
 			}),
-			messages: previousMessages.concat({
-				role: 'user',
-				content: message.toString(),
-			}),
+			messages: currentMessages,
 		});
 
+		// Send response in chunks
 		this.currentBuffer = '';
 		for await (const chunk of response.textStream) {
 			this.currentBuffer += chunk;
-			const message: WSMessage = {
+			this.broadcastMessage({
 				type: 'partial',
 				message: chunk,
-			};
-			this.sessions.forEach((attachment, connectedWs) => {
-				connectedWs.send(JSON.stringify(message));
 			});
 		}
+
+		this.broadcastMessage({
+			type: 'end',
+		});
+
+		// Only save after complete generation
 		this.sql.exec(
 			'INSERT INTO messages (message, role) VALUES (?, ?);',
 			this.currentBuffer,
 			'assistant',
 		);
-		this.sessions.forEach((attachment, connectedWs) => {
-			const endMessage: WSMessage = {
-				type: 'end',
-			};
-			connectedWs.send(JSON.stringify(endMessage));
-		});
 		this.currentBuffer = null;
-		// Upon receiving a message from the client, the server replies with the same message, the session ID of the connection,
-		// and the total number of connections with the "[Durable Object]: " prefix
-		// ws.send(`[Durable Object] message: ${message}, from: ${session.id}, to: the initiating client. Total connections: ${this.sessions.size}`);
-
-		// // Send a message to all WebSocket connections, loop over all the connected WebSockets.
-		// this.sessions.forEach((attachment, connectedWs) => {
-		// 	connectedWs.send(`[Durable Object] message: ${message}, from: ${session.id}, to: all clients. Total connections: ${this.sessions.size}`);
-		// });
-
-		// Send a message to all WebSocket connections except the connection (ws),
-		// loop over all the connected WebSockets and filter out the connection (ws).
-		// this.sessions.forEach((attachment, connectedWs) => {
-		// 	if (connectedWs !== ws) {
-		// 		connectedWs.send(`[Durable Object] message: ${message}, from: ${session.id}, to: all clients except the initiating client. Total connections: ${this.sessions.size}`);
-		// 	}
-		// });
 	}
 
-	async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
-		// If the client closes the connection, the runtime will invoke the webSocketClose() handler.
+	async webSocketClose(ws: WebSocket, code: number, _reason: string, _wasClean: boolean) {
+		// Broadcast updated user count to other clients
 		this.sessions.delete(ws);
-		ws.close(code, 'Durable Object is closing WebSocket');
+		this.broadcastMessage({
+			type: 'userInfo',
+			count: this.sessions.size,
+		});
+	}
+
+	// Helpers
+	broadcastMessage(wsMessage: WSMessage) {
+		this.sessions.forEach((attachment, connectedWs) => {
+			connectedWs.send(JSON.stringify(wsMessage));
+		});
 	}
 }

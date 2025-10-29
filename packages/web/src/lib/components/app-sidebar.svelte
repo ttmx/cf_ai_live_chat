@@ -5,23 +5,7 @@
 	// Menu items.
 	const items = [
 		{
-			title: 'Home',
-			url: '#',
-		},
-		{
-			title: 'Inbox',
-			url: '#',
-		},
-		{
-			title: 'Calendar',
-			url: '#',
-		},
-		{
-			title: 'Search',
-			url: '#',
-		},
-		{
-			title: 'Settings',
+			title: 'In Construction',
 			url: '#',
 		},
 	];
@@ -36,7 +20,7 @@
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton>
 							{#snippet child({ props })}
-								<a href={resolve('/new')} {...props}>
+								<a href={resolve('/')} {...props}>
 									<span> + New Chat</span>
 								</a>
 							{/snippet}

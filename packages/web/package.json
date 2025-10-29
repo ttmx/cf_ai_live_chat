@@ -43,6 +43,7 @@
 		"wrangler": "^4.45.0"
 	},
 	"dependencies": {
+		"@humanspeak/svelte-markdown": "^0.8.13",
 		"ai": "^5.0.80"
 	}
 }

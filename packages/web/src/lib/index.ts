@@ -17,6 +17,9 @@ export type WSMessage = {
 }| {
   type: 'user',
   message: string;
+}|{
+	type: 'userInfo';
+	count: number;
 }
 
 export type UserWSMessage = {

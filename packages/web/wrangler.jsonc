@@ -53,5 +53,8 @@
       "custom_domain": true
     }
   ],
+  "vars": {
+    "WS_URL": "wss://ws-chat.tteles.dev/ws"
+  },
   "preview_urls": true
 }

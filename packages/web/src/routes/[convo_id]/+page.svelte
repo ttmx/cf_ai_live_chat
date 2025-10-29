@@ -1,30 +1,30 @@
 <script lang="ts">
-	import type { WSMessage } from '$lib';
-	import * as InputGroup from '$lib/components/ui/input-group';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import SendHorizontalIcon from '@lucide/svelte/icons/send-horizontal';
 	import { page } from '$app/state';
+	import { PUBLIC_BASE_URL } from '$env/static/public';
+	import type { WSMessage } from '$lib';
+	import { Badge } from '$lib/components/ui/badge';
+	import * as InputGroup from '$lib/components/ui/input-group';
+	import SvelteMarkdown from '@humanspeak/svelte-markdown';
+	import SendHorizontalIcon from '@lucide/svelte/icons/send-horizontal';
+	import UserIcon from '@lucide/svelte/icons/user';
 	import type { ModelMessage } from 'ai';
 	import { onMount } from 'svelte';
-	const messages:ModelMessage[] = $state([]);
+	let messages:ModelMessage[] = $state([]);
 	let currentMessage: string|null = $state(null);
-	let { data } = $props();
-  let textboxValue: string = $state('')
-  let socket : WebSocket;
+	let textboxValue = $state('');
+	let socket : WebSocket;
+	let currentUserCount: number |null = $state(null);
 	onMount(() => {
-		console.log('WebSocket Address:', data.wsAddress + '?convoId=' + page.params.convo_id);
-		socket = new WebSocket(data.wsAddress + '?convoId=' + page.params.convo_id);
+		socket = new WebSocket(`ws://${PUBLIC_BASE_URL}/ws?convoId=${page.params.convo_id}`);
 
-    socket.onopen = () => {
-      console.log('WebSocket connection established');
-    };
+		socket.onopen = () => {
+			console.log('WebSocket connection established');
+		};
+
 		socket.onmessage = event => {
 			const message: WSMessage = JSON.parse(event.data);
 			if (message.type === 'history') {
-				message.messages
-					.map(msg => {
-						messages.push(msg);
-					});
+				messages.push(...message.messages);
 				currentMessage = message.currentMessage;
 			} else if (message.type === 'partial') {
 				if (currentMessage === null) {
@@ -38,52 +38,60 @@
 				currentMessage = null;
 			} else if (message.type === 'user') {
 				messages.push({ role: 'user', content: message.message });
+			} else if (message.type === 'userInfo') {
+				currentUserCount = message.count;
 			}
 		};
-    return () => {
-      socket.close();
-    };
+		return () => {
+			socket.close();
+		};
 	});
 
-  function submitMessage() {
-    socket.send(textboxValue);
-    textboxValue = '';
-  }
+	function submitMessage() {
+		let message = { type: 'userInput', content: textboxValue };
+		socket.send(JSON.stringify(message));
+		textboxValue = '';
+	}
 </script>
 
+<div class="inline-block">
+	<Badge><UserIcon/> {currentUserCount} </Badge>
+</div>
 <div class="w-full h-full flex flex-col items-center justify-end p-8 pb-16">
-	{#each messages as msg, index (index)}
-    {#if msg.role === 'user'}
-      <div class="w-full max-w-2xl mb-4 p-4 rounded-lg bg-primary/10 border-primary/40 border-2 self-end text-primary">
-        <p>{msg.content}</p>
-      </div>
-    {:else}
-      <div class="w-full max-w-2xl mb-4 p-4 rounded-lg self-start">
-        <p>{msg.content}</p>
-      </div>
-    {/if}
-	{/each}
-	{#if currentMessage !== null}
-		<div class="w-full max-w-2xl mb-4 p-4 rounded-lg bg-gray-100 self-start">
-			<p>{currentMessage}</p>
-		</div>
-	{/if}
+	<div class="overflow-y-scroll w-full flex flex-col">
+		{#each messages as msg, index (index)}
+			{#if msg.role === 'user'}
+				<div class="w-full max-w-2xl mb-4 p-4 rounded-lg bg-primary/10 border-primary/40 border-2 self-end text-primary">
+					<p>{msg.content}</p>
+				</div>
+			{:else}
+				<div class="w-full max-w-2xl mb-4 p-4 rounded-lg self-start">
+					<SvelteMarkdown source={msg.content.toString()} />
+				</div>
+			{/if}
+		{/each}
+		{#if currentMessage !== null}
+			<div class="w-full max-w-2xl mb-4 p-4 rounded-lg bg-gray-100 self-start">
+				<SvelteMarkdown source={currentMessage.toString()} />
+			</div>
+		{/if}
+	</div>
 	<InputGroup.Root class="w-full max-w-2xl">
 		<InputGroup.Textarea
-    bind:value={textboxValue}
-    onkeydown={(e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        submitMessage();
-      }
-    }}
-    placeholder="Ask, Search or Chat..." />
+			bind:value={textboxValue}
+			onkeydown={e => {
+				if (e.key === 'Enter' && !e.shiftKey) {
+					e.preventDefault();
+					submitMessage();
+				}
+			}}
+			placeholder="Ask, Search or Chat..." />
 		<InputGroup.Addon align="block-end">
 			<InputGroup.Button
 				variant="default"
 				class="rounded-full ml-auto"
 				size="icon-xs"
-        onclick={submitMessage}
+				onclick={submitMessage}
 			>
 				<SendHorizontalIcon />
 				<span class="sr-only">Send</span>

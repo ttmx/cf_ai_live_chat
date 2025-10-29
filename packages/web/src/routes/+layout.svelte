@@ -2,6 +2,7 @@
 	import '../app.css';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
+	import { page } from '$app/state';
 
 	let { children } = $props();
 </script>
@@ -10,6 +11,9 @@
 	<AppSidebar />
 	<main class="w-full">
 		<Sidebar.Trigger />
-		{@render children?.()}
+		{#key page.url.pathname}
+			{@render children?.()}
+
+		{/key}
 	</main>
 </Sidebar.Provider>

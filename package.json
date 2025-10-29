@@ -5,5 +5,8 @@
   },
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"]
+  "workspaces": ["packages/*"],
+  "dependencies": {
+    "wrangler": "^4.45.1"
+  }
 }
