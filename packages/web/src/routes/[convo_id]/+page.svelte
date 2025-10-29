@@ -15,6 +15,7 @@
 	let messages:ModelMessage[] = $state(data.history.messages || []);
 	let currentMessage: string|null = $state(data.history.currentMessage || null);
 	let textboxValue = $state('');
+	let textarea: HTMLTextAreaElement| null = null;
 	let socket : WebSocket;
 	let currentUserCount: number |null = $state(null);
 	onMount(() => {
@@ -45,6 +46,8 @@
 				currentUserCount = message.count;
 			}
 		};
+
+		textarea?.focus();
 		return () => {
 			socket.close();
 		};
@@ -81,6 +84,7 @@
 	</div>
 	<InputGroup.Root class="w-full max-w-2xl">
 		<InputGroup.Textarea
+			bind:ref={textarea}
 			bind:value={textboxValue}
 			onkeydown={e => {
 				if (e.key === 'Enter' && !e.shiftKey) {
