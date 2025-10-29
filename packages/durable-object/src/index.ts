@@ -21,7 +21,7 @@ const openapi = fromHono(app, {
 openapi.get('/ws', WSRoute);
 openapi.get('/history', HistoryRoute);
 openapi.post('/new', NewRoute);
-openapi.get("/list", ListRoute)
+openapi.get('/list', ListRoute);
 
 // You may also register routes for non OpenAPI directly on Hono
 // app.get('/test', (c) => c.text('Hono!'))

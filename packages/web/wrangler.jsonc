@@ -54,7 +54,13 @@
     }
   ],
   "vars": {
-    "WS_URL": "wss://ws-chat.tteles.dev/ws"
+    "WS_URL": "https://ws-chat.tteles.dev"
   },
+  "services": [
+    {
+      "binding": "WS",
+      "service": "chat-durable-object"
+    }
+  ],
   "preview_urls": true
 }

@@ -10,7 +10,7 @@
 	import type { ModelMessage } from 'ai';
 	import { onMount } from 'svelte';
 
-	let {data} = $props();
+	let { data } = $props();
 
 	let messages:ModelMessage[] = $state(data.history.messages || []);
 	let currentMessage: string|null = $state(data.history.currentMessage || null);
@@ -19,7 +19,8 @@
 	let socket : WebSocket;
 	let currentUserCount: number |null = $state(null);
 	onMount(() => {
-		socket = new WebSocket(`ws://${PUBLIC_BASE_URL}/ws?convoId=${page.params.convo_id}`);
+		// substring to change http to ws and https to wss
+		socket = new WebSocket(`ws${PUBLIC_BASE_URL.substring(4)}/ws?convoId=${page.params.convo_id}`);
 
 		socket.onopen = () => {
 			console.log('WebSocket connection established');
@@ -28,7 +29,7 @@
 		socket.onmessage = event => {
 			const message: WSMessage = JSON.parse(event.data);
 			if (message.type === 'history') {
-				messages = message.messages
+				messages = message.messages;
 				currentMessage = message.currentMessage;
 			} else if (message.type === 'partial') {
 				if (currentMessage === null) {

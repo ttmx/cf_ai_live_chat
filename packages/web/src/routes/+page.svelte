@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { PUBLIC_BASE_URL } from '$env/static/public';
 	import * as InputGroup from '$lib/components/ui/input-group';
-	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SendHorizontalIcon from '@lucide/svelte/icons/send-horizontal';
-    import { onMount } from 'svelte';
+	import { onMount } from 'svelte';
 
 	let textareaValue = $state('');
 	let textarea: HTMLTextAreaElement| null = null;
 
 	async function submitFirstMessage() {
 		if (textareaValue.trim() === '') return;
-		let result = await fetch(`http://${PUBLIC_BASE_URL}/new`, {
+		let result = await fetch(`${PUBLIC_BASE_URL}/new`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -20,7 +20,7 @@
 		});
 		const uuidResult: { chatId: string } = await result.json();
 
-		goto(`/${uuidResult.chatId}`);
+		goto(resolve(`/${uuidResult.chatId}`));
 	}
 
 	onMount(() => {

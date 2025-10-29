@@ -39,6 +39,7 @@
         "ai": "^5.0.80",
       },
       "devDependencies": {
+        "@cloudflare/workers-types": "^4.20251014.0",
         "@eslint/compat": "^1.4.0",
         "@eslint/js": "^9.36.0",
         "@internationalized/date": "^3.10.0",

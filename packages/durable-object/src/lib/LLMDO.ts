@@ -40,6 +40,7 @@ export class WebSocketHibernationServer extends DurableObject {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.sessions = new Map;
+		console.log('Woke up Durable Object:', ctx.id.toString());
 
 		// As part of constructing the Durable Object,
 		// we wake up any hibernating WebSockets and
@@ -60,6 +61,7 @@ export class WebSocketHibernationServer extends DurableObject {
 		this.workersAI = workersAI;
 
 		this.setupTable();
+		console.log('Durable Object setup complete.');
 	}
 
 	// DB ops

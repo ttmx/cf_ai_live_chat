@@ -15,7 +15,7 @@ export class ListRoute extends OpenAPIRoute {
 				content: {
 					'application/json': {
 						schema: z.array(Str({
-								description: 'ID of the chat',
+							description: 'ID of the chat',
 						})),
 					},
 				},
@@ -27,11 +27,10 @@ export class ListRoute extends OpenAPIRoute {
 		// Get validated data
 		const { keys } = await env.KV.list();
 
-
 		return keys.map(k => {
-			let metadata = k.metadata;
-			if (typeof metadata !== 'object' || metadata === null) return null
-			if (!("startText" in metadata)) return null
+			const metadata = k.metadata;
+			if (typeof metadata !== 'object' || metadata === null) return null;
+			if (!('startText' in metadata)) return null;
 
 			return {
 				chatId: k.name,
