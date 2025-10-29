@@ -32,12 +32,6 @@ export class HistoryRoute extends OpenAPIRoute {
 		const { convoId } = data.query;
 		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.getByName(convoId);
 
-		const upgradeHeader = c.req.header('Upgrade');
-		if (!upgradeHeader || upgradeHeader !== 'websocket') {
-			return new Response('Worker expected Upgrade: websocket', {
-				status: 426,
-			});
-		}
-		return hibernationDO.fetch(c.req.raw);
+		return hibernationDO.getHistory();
 	}
 }

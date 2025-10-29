@@ -18,7 +18,6 @@
 		});
 		const uuidResult: { chatId: string } = await result.json();
 
-		console.log('New conversation started:', uuidResult);
 		goto(`/${uuidResult.chatId}`);
 	}
 

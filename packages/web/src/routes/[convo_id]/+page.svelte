@@ -9,8 +9,11 @@
 	import UserIcon from '@lucide/svelte/icons/user';
 	import type { ModelMessage } from 'ai';
 	import { onMount } from 'svelte';
-	let messages:ModelMessage[] = $state([]);
-	let currentMessage: string|null = $state(null);
+
+	let {data} = $props();
+
+	let messages:ModelMessage[] = $state(data.history.messages || []);
+	let currentMessage: string|null = $state(data.history.currentMessage || null);
 	let textboxValue = $state('');
 	let socket : WebSocket;
 	let currentUserCount: number |null = $state(null);
@@ -24,7 +27,7 @@
 		socket.onmessage = event => {
 			const message: WSMessage = JSON.parse(event.data);
 			if (message.type === 'history') {
-				messages.push(...message.messages);
+				messages = message.messages
 				currentMessage = message.currentMessage;
 			} else if (message.type === 'partial') {
 				if (currentMessage === null) {

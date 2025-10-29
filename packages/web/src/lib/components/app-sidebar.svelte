@@ -2,13 +2,7 @@
 	import { resolve } from '$app/paths';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 
-	// Menu items.
-	const items = [
-		{
-			title: 'In Construction',
-			url: '#',
-		},
-	];
+	const { items = [] }: { items: { title: string; url: string }[] } = $props();
 </script>
 
 <Sidebar.Root>

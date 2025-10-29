@@ -65,5 +65,11 @@
 			"tag": "v1"
 		}
 	],
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "cf-ai-demo"
+		}
+	],
 	"preview_urls": true
 }

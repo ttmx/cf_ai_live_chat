@@ -1,0 +1,42 @@
+import { OpenAPIRoute, Str } from 'chanfana';
+import { env } from 'cloudflare:workers';
+import { z } from 'zod';
+import { type AppContext } from '../types';
+
+export class ListRoute extends OpenAPIRoute {
+	schema = {
+		tags: ['LLM'],
+		summary: 'List all chats',
+		request: {
+		},
+		responses: {
+			'200': {
+				description: 'List of all chats',
+				content: {
+					'application/json': {
+						schema: z.array(Str({
+								description: 'ID of the chat',
+						})),
+					},
+				},
+			},
+		},
+	};
+
+	async handle(c: AppContext) {
+		// Get validated data
+		const { keys } = await env.KV.list();
+
+
+		return keys.map(k => {
+			let metadata = k.metadata;
+			if (typeof metadata !== 'object' || metadata === null) return null
+			if (!("startText" in metadata)) return null
+
+			return {
+				chatId: k.name,
+				startText: metadata.startText,
+			};
+		}).filter(v => v !== null);
+	}
+}
