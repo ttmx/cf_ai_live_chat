@@ -26,6 +26,10 @@ type UserWSMessage = {
 	content: string;
 }
 
+// the `ai` package doesn't export the TextGenerationModels type
+const modelName: Parameters<WorkersAI>[0] = '@cf/meta/llama-3.1-8b-instruct-fp8'
+const maxTokens = 500;
+
 export class WebSocketHibernationServer extends DurableObject {
 	// Keeps track of all WebSocket connections
 	// When the DO hibernates, gets reconstructed in the constructor
@@ -40,7 +44,6 @@ export class WebSocketHibernationServer extends DurableObject {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.sessions = new Map;
-		console.log('Woke up Durable Object:', ctx.id.toString());
 
 		// As part of constructing the Durable Object,
 		// we wake up any hibernating WebSockets and
@@ -61,7 +64,6 @@ export class WebSocketHibernationServer extends DurableObject {
 		this.workersAI = workersAI;
 
 		this.setupTable();
-		console.log('Durable Object setup complete.');
 	}
 
 	// DB ops
@@ -164,8 +166,8 @@ export class WebSocketHibernationServer extends DurableObject {
 
 		// Start generating the response
 		const response = streamText({
-			model: this.workersAI('@cf/meta/llama-3.1-8b-instruct-fp8', {
-				max_tokens: 500,
+			model: this.workersAI(modelName, {
+				max_tokens: maxTokens,
 				stream: true,
 			}),
 			messages: currentMessages,
@@ -186,11 +188,7 @@ export class WebSocketHibernationServer extends DurableObject {
 		});
 
 		// Only save after complete generation
-		this.sql.exec(
-			'INSERT INTO messages (message, role) VALUES (?, ?);',
-			this.currentBuffer,
-			'assistant',
-		);
+		this.addMessage('assistant', this.currentBuffer);
 		this.currentBuffer = null;
 	}
 
