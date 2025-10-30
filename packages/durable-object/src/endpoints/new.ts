@@ -43,7 +43,9 @@ export class NewRoute extends OpenAPIRoute {
 		// Retrieve the validated body
 		const { message } = data.body;
 
-		const uuid = crypto.randomUUID();
+		const hibernationDOId = env.WEBSOCKET_HIBERNATION_SERVER.newUniqueId();
+		const uuid = hibernationDOId.toString();
+
 		// Save an empty entry in the KV for our listing endpoint
 		await env.KV.put(uuid, '', {
 			metadata: {
@@ -53,8 +55,8 @@ export class NewRoute extends OpenAPIRoute {
 				startText: message.slice(0, 100),
 			},
 		});
-		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.getByName(uuid);
-		console.log('Created new chat with ID:', uuid, 'and initial message:', message, '. Connecting to Durable Object.' + hibernationDO.id);
+
+		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.get(hibernationDOId);
 
 		// If we do not waitUntil, this submitUserMessage call gets cancelled when the request ends
 		// We don't await it because we want to return the chatId immediately

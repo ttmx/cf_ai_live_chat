@@ -30,7 +30,9 @@ export class HistoryRoute extends OpenAPIRoute {
 
 		// Retrieve the validated parameters
 		const { convoId } = data.query;
-		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.getByName(convoId);
+		const hibernationDOId = env.WEBSOCKET_HIBERNATION_SERVER.idFromString(convoId);
+
+		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.get(hibernationDOId);
 
 		return hibernationDO.getHistory();
 	}
