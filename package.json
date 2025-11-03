@@ -7,7 +7,5 @@
   "type": "module",
   "workspaces": ["packages/*"],
   "dependencies": {
-    "@automerge/automerge": "^3.2.0",
-    "wrangler": "^4.45.1"
   }
 }
