@@ -35,3 +35,4 @@ jobs:
         run: npm run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PUBLIC_BASE_URL: https://ws-chat.tteles.dev
