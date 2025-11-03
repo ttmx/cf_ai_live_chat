@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { PUBLIC_BASE_URL } from '$env/static/public';
-	import type { WSMessage } from '$lib';
+	import type { SharedDoc, WSMessage } from '$lib';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as InputGroup from '$lib/components/ui/input-group';
+	import { ExistingWebSocketAdapter } from '$lib/ExistingWebSocketAdapter';
+	import { Repo, type DocHandle, type DocumentId, type PeerId } from '@automerge/automerge-repo';
 	import SvelteMarkdown from '@humanspeak/svelte-markdown';
 	import SendHorizontalIcon from '@lucide/svelte/icons/send-horizontal';
 	import UserIcon from '@lucide/svelte/icons/user';
@@ -12,21 +14,46 @@
 
 	let { data } = $props();
 
+	// History
 	let messages:ModelMessage[] = $state(data.history.messages || []);
+
+	// Current streaming message
 	let currentMessage: string|null = $state(data.history.currentMessage || null);
+
+	// Input
 	let textboxValue = $state('');
-	let textarea: HTMLTextAreaElement| null = null;
+	let textarea = $state<HTMLTextAreaElement| null>(null);
+
+	// Automerge
+	let repo: Repo | null = null;
+	let adapter: ExistingWebSocketAdapter | null = null;
+	let docHandle: DocHandle<SharedDoc> | null = null;
+	let documentId: DocumentId | null = null;
+	let assignedPeerId: PeerId | null = null;
+
 	let socket : WebSocket;
 	let currentUserCount: number |null = $state(null);
+
 	onMount(() => {
 		// substring to change http to ws and https to wss
 		socket = new WebSocket(`ws${PUBLIC_BASE_URL.substring(4)}/ws?convoId=${page.params.convo_id}`);
+
+		// Just standardize to arraybuffer like in the server
+		socket.binaryType = 'arraybuffer';
 
 		socket.onopen = () => {
 			console.log('WebSocket connection established');
 		};
 
-		socket.onmessage = event => {
+		socket.onmessage = async event => {
+			// Hack check if this is a binary frame to distinguish automerge messages
+			if (event.data instanceof ArrayBuffer) {
+				let bytes = new Uint8Array(event.data);
+				adapter?.receiveMessage(bytes);
+				return;
+			}
+
+			// Handle JSON messages
 			const message: WSMessage = JSON.parse(event.data);
 			if (message.type === 'history') {
 				messages = message.messages;
@@ -45,6 +72,52 @@
 				messages.push({ role: 'user', content: message.message });
 			} else if (message.type === 'userInfo') {
 				currentUserCount = message.count;
+			} else if (message.type === 'automergeInfo') {
+				assignedPeerId = message.peerId;
+
+				// Now initialize Automerge client with the correct peerId
+				const adapterInstance = new ExistingWebSocketAdapter(socket);
+
+				// Create repo with the server-assigned peerId
+				repo = new Repo({
+					peerId: assignedPeerId,
+					network: [adapterInstance],
+				});
+				adapter = adapterInstance;
+
+				// Connect with the server-assigned peerId
+				adapter.connect(assignedPeerId);
+
+				// Connect to the shared document
+				documentId = message.documentId;
+				if (repo && adapter) {
+					try {
+						// Wait for the peer connection to be established
+						await adapter.whenPeerConnected();
+
+						const handle = await repo.find<SharedDoc>(documentId);
+						docHandle = handle;
+
+						// Subscribe to changes
+						docHandle.on('change', ({ doc }) => {
+							if (doc && doc.userInput !== undefined) {
+								textboxValue = doc.userInput || '';
+							}
+						});
+
+						// Wait for document to be ready
+						await docHandle.whenReady();
+						const doc = docHandle.doc();
+						textboxValue = doc.userInput || '';
+
+						console.log('Document connection setup complete');
+					} catch (error) {
+						console.error('Failed to connect to document:', error);
+					// console.error('Error stack:', error.stack);
+					}
+				} else {
+					console.error('Cannot connect to document: repo or adapter is null', { repo, adapter, assignedPeerId });
+				}
 			}
 		};
 
@@ -55,10 +128,30 @@
 	});
 
 	function submitMessage() {
-		let message = { type: 'userInput', content: textboxValue };
+		let message = { type: 'message', content: textboxValue };
 		socket.send(JSON.stringify(message));
-		textboxValue = '';
+
+		// Update the shared document
+		if (docHandle) {
+			docHandle.change(doc => {
+				doc.userInput = '';
+			});
+		}
 	}
+
+	function handleInput(value: string) {
+		textboxValue = value;
+
+		// Update the shared Automerge document
+		if (docHandle) {
+			docHandle.change(doc => {
+				doc.userInput = value;
+			});
+		} else {
+			console.warn('docHandle is null, cannot update document');
+		}
+	}
+
 </script>
 
 <div class="inline-block">
@@ -86,7 +179,8 @@
 	<InputGroup.Root class="w-full max-w-2xl">
 		<InputGroup.Textarea
 			bind:ref={textarea}
-			bind:value={textboxValue}
+			value={textboxValue}
+			oninput={(e: Event) => handleInput((e.target as HTMLTextAreaElement).value)}
 			onkeydown={e => {
 				if (e.key === 'Enter' && !e.shiftKey) {
 					e.preventDefault();

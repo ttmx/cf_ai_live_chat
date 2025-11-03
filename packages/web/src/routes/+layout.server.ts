@@ -1,6 +1,6 @@
 import { PUBLIC_BASE_URL } from '$env/static/public';
 
-export const load = async ({ fetch, platform }) => {
+export const load = async ({ platform }) => {
 	try {
 		const res = await platform?.env.WS.fetch(PUBLIC_BASE_URL + '/list');
 		if (!res) {

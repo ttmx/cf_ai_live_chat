@@ -11,6 +11,9 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@automerge/automerge": "^3.2.0",
+    "@automerge/automerge-repo": "^2.4.0",
+    "@automerge/automerge-repo-network-websocket": "^2.4.0",
     "@eslint/compat": "^1.4.0",
     "@eslint/js": "^9.38.0",
     "ai": "^5.0.80",

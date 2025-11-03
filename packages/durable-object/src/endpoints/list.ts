@@ -23,7 +23,7 @@ export class ListRoute extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c: AppContext) {
+	async handle(_c: AppContext) {
 		// Get validated data
 		const { keys } = await env.KV.list();
 

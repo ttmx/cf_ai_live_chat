@@ -24,16 +24,21 @@ export class HistoryRoute extends OpenAPIRoute {
 		},
 	};
 
-	async handle(c: AppContext) {
+	async handle(_c: AppContext) {
 		// Get validated data
 		const data = await this.getValidatedData<typeof this.schema>();
 
-		// Retrieve the validated parameters
 		const { convoId } = data.query;
-		const hibernationDOId = env.WEBSOCKET_HIBERNATION_SERVER.idFromString(convoId);
+		try {
+		// Retrieve the validated parameters
+			const hibernationDOId = env.WEBSOCKET_HIBERNATION_SERVER.idFromString(convoId);
 
-		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.get(hibernationDOId);
+			const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.get(hibernationDOId);
 
-		return hibernationDO.getHistory();
+			return hibernationDO.getHistory();
+		} catch (error) {
+			console.error('Error fetching history for conversation ID:', convoId, error);
+			return new Response('Internal Server Error', { status: 500 });
+		}
 	}
 }

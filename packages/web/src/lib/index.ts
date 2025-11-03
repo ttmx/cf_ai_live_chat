@@ -1,5 +1,6 @@
 // place files you want to import through the `$lib` alias in this folder.
 
+import type { DocumentId, PeerId } from '@automerge/automerge-repo';
 import type { ModelMessage } from 'ai';
 
 export type WSMessage = {
@@ -20,9 +21,20 @@ export type WSMessage = {
 }|{
 	type: 'userInfo';
 	count: number;
+}| {
+	type: 'automerge';
+	data: ArrayBuffer;
+}|{
+	type: 'automergeInfo';
+	peerId: PeerId;
+	documentId: DocumentId;
 }
 
 export type UserWSMessage = {
 	type: 'message'
 	content: string;
 }
+
+export type SharedDoc = {
+	userInput: string;
+};

@@ -1,12 +1,21 @@
 import { DurableObject } from 'cloudflare:workers';
 import { ModelMessage, streamText } from 'ai';
 import { createWorkersAI, WorkersAI } from 'workers-ai-provider';
+import { Repo, type DocHandle } from '@automerge/automerge-repo';
+import type { DocumentId, PeerId } from '@automerge/automerge-repo';
+import { SqliteStorageAdapter } from './SqliteStorageAdapter';
+import { ExternalWebsocketsNetworkAdapter } from './ExternalWebsocketNetworkAdapter';
 
-type WSMessage = {
+type SharedDoc = {
+	userInput: string;
+};
+
+export type WSMessage = {
   type: 'history'
   messages: ModelMessage[];
   currentMessage: string | null;
-}|{ type: 'partial',
+}|{
+  type: 'partial',
   message: string;
 }| {
   type: 'end',
@@ -19,27 +28,48 @@ type WSMessage = {
 }|{
 	type: 'userInfo';
 	count: number;
+}| {
+	type: 'automerge';
+	data: ArrayBuffer;
+}|{
+	type: 'automergeInfo';
+	peerId: PeerId;
+	documentId: DocumentId;
 }
 
 type UserWSMessage = {
 	type: 'message'
 	content: string;
+} | {
+	type: 'automerge';
+	data: ArrayBuffer;
 }
 
 // the `ai` package doesn't export the TextGenerationModels type
-const modelName: Parameters<WorkersAI>[0] = '@cf/meta/llama-3.1-8b-instruct-fp8'
+const modelName: Parameters<WorkersAI>[0] = '@cf/meta/llama-3.1-8b-instruct-fp8';
 const maxTokens = 500;
 
 export class WebSocketHibernationServer extends DurableObject {
 	// Keeps track of all WebSocket connections
 	// When the DO hibernates, gets reconstructed in the constructor
-	sessions: Map<WebSocket, { [key: string]: string }>;
+	sessions: Map<WebSocket, { peerId: PeerId, id: string }>;
 
 	currentBuffer: string | null = null;
 
 	sql: SqlStorage;
 
 	workersAI: WorkersAI;
+
+	// Automerge
+	repo: Repo;
+
+	networkAdapter: ExternalWebsocketsNetworkAdapter;
+
+	sharedDocHandle: DocHandle<SharedDoc> | null = null;
+
+	documentId: DocumentId | null = null;
+
+	documentReady: Promise<void>;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -64,6 +94,63 @@ export class WebSocketHibernationServer extends DurableObject {
 		this.workersAI = workersAI;
 
 		this.setupTable();
+
+		// Initialize Automerge repo
+		const storageAdapter = new SqliteStorageAdapter(this.sql);
+		this.networkAdapter = new ExternalWebsocketsNetworkAdapter(this.sessions);
+
+		this.repo = new Repo({
+			storage: storageAdapter,
+			network: [this.networkAdapter],
+			peerId: `server-${ctx.id.toString()}` as PeerId,
+		});
+
+		// Connect the network adapter
+		this.networkAdapter.connect(
+			`server-${ctx.id.toString()}` as PeerId,
+			{ isEphemeral: false },
+		);
+
+		// Initialize or load the shared document
+		this.documentReady = this.initializeSharedDocument();
+
+		// Re-establish peer connections for any hibernated WebSockets
+		this.reestablishPeerConnections();
+	}
+
+	reestablishPeerConnections() {
+		// When waking from hibernation, we need to re-notify the network adapter
+		// about existing WebSocket connections
+		if (this.sessions.size > 0) {
+			for (const [_ws, sessionData] of this.sessions.entries()) {
+				if (sessionData.peerId) {
+					// Re-emit peer-candidate to the repo so it knows about this peer
+					this.networkAdapter.emit('peer-candidate', {
+						peerId: sessionData.peerId as PeerId,
+						peerMetadata: {},
+					});
+				}
+			}
+		}
+	}
+
+	async initializeSharedDocument() {
+		// Try to load existing document ID from storage
+		const storedDocId = await this.ctx.storage.get<string>('automerge-doc-id');
+
+		if (storedDocId) {
+			// Load existing document
+			this.documentId = storedDocId as DocumentId;
+			this.sharedDocHandle = await this.repo.find<SharedDoc>(this.documentId);
+		} else {
+			// Create new document
+			this.sharedDocHandle = this.repo.create<SharedDoc>({ userInput: '' });
+			this.documentId = this.sharedDocHandle.documentId;
+			await this.ctx.storage.put('automerge-doc-id', this.documentId);
+		}
+
+		// Wait for document to be ready
+		await this.sharedDocHandle.whenReady();
 	}
 
 	// DB ops
@@ -106,6 +193,9 @@ export class WebSocketHibernationServer extends DurableObject {
 	// WebSocket handlers
 
 	async fetch(_request: Request): Promise<Response> {
+		// Wait for document to be initialized
+		await this.documentReady;
+
 		// Creates two ends of a WebSocket connection.
 		const webSocketPair = new WebSocketPair;
 		const [client, server] = Object.values(webSocketPair);
@@ -115,16 +205,26 @@ export class WebSocketHibernationServer extends DurableObject {
 
 		// Generate a random UUID for the session.
 		const id = crypto.randomUUID();
+		const peerId = `client-${id}` as PeerId;
 
-		// Attach the session ID to the WebSocket connection and serialize it.
+		// Attach the session ID and peerId to the WebSocket connection and serialize it.
 		// This is necessary to restore the state of the connection when the Durable Object wakes up.
-		server.serializeAttachment({ id });
+		server.serializeAttachment({ id, peerId });
 
 		// Add the WebSocket connection to the map of active sessions.
-		this.sessions.set(server, { id });
+		this.sessions.set(server, { id, peerId });
 
 		const history = this.getHistory();
 		server.send(JSON.stringify(history));
+
+		// Send peerId to client so they can use it for Automerge
+		const peerIdMessage: WSMessage = {
+			type: 'automergeInfo',
+			peerId: peerId,
+			documentId: this.documentId,
+		};
+		server.send(JSON.stringify(peerIdMessage));
+
 		const userInfoMessage: WSMessage = {
 			type: 'userInfo',
 			count: this.sessions.size,
@@ -139,16 +239,31 @@ export class WebSocketHibernationServer extends DurableObject {
 
 	async webSocketMessage(ws: WebSocket, message: ArrayBuffer | string) {
 		// Get the session associated with the WebSocket connection.
+		const session = this.sessions.get(ws);
+		if (!session) return;
 
+		// Hack to distinguish Automerge messages from normal chat messages
+		// Automerge uses CBOR to be more efficient, and this is sent as a binary frame
+		if (message instanceof ArrayBuffer) {
+			this.networkAdapter.receiveMessage(new Uint8Array(message), session.peerId);
+			return;
+		}
+
+		// Handle regular chat messages
 		if (this.currentBuffer != null) {
 			const endMessage: WSMessage = {
 				type: 'error',
 				error: 'already generating',
 			};
 			ws.send(JSON.stringify(endMessage));
+			return;
 		}
-		const userMessage: UserWSMessage = JSON.parse(message.toString());
-		await this.submitUserMessage(userMessage.content);
+
+		const userMessage: UserWSMessage = JSON.parse(message);
+
+		if (userMessage.type === 'message') {
+			await this.submitUserMessage(userMessage.content);
+		}
 	}
 
 	async submitUserMessage(userMessage: string) {
@@ -156,7 +271,7 @@ export class WebSocketHibernationServer extends DurableObject {
 		this.addMessage('user', userMessage);
 
 		// Retrieve current messages
-		const currentMessages: ModelMessage[] = this.getMessageHistory();
+		const currentMessages = this.getMessageHistory();
 
 		// Notify all ws about the new user message
 		this.broadcastMessage({
@@ -192,13 +307,28 @@ export class WebSocketHibernationServer extends DurableObject {
 		this.currentBuffer = null;
 	}
 
-	async webSocketClose(ws: WebSocket, code: number, _reason: string, _wasClean: boolean) {
+	async webSocketClose(ws: WebSocket, _code: number, _reason: string, _wasClean: boolean) {
+		// Get session info before deleting
+		const session = this.sessions.get(ws);
+		const peerId = session?.peerId as PeerId;
+
+		// Notify network adapter of disconnect
+		if (peerId) {
+			this.networkAdapter.handleDisconnect(peerId);
+		}
+
 		// Broadcast updated user count to other clients
 		this.sessions.delete(ws);
 		this.broadcastMessage({
 			type: 'userInfo',
 			count: this.sessions.size,
 		});
+	}
+
+	async webSocketError(ws: WebSocket, error: unknown) {
+		const session = this.sessions.get(ws);
+		const peerId = session?.peerId;
+		console.error(`WebSocket error for peer ${peerId}:`, error);
 	}
 
 	// Helpers

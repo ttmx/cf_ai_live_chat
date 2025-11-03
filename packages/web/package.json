@@ -44,7 +44,11 @@
 		"wrangler": "^4.45.0"
 	},
 	"dependencies": {
+		"@automerge/automerge-repo": "^2.4.0",
+		"@automerge/automerge-repo-network-websocket": "^2.4.0",
 		"@humanspeak/svelte-markdown": "^0.8.13",
-		"ai": "^5.0.80"
+		"ai": "^5.0.80",
+		"vite-plugin-top-level-await": "^1.6.0",
+		"vite-plugin-wasm": "^3.5.0"
 	}
 }
