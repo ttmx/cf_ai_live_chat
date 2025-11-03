@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { goto, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { PUBLIC_BASE_URL } from '$env/static/public';
 	import * as InputGroup from '$lib/components/ui/input-group';
@@ -20,6 +20,7 @@
 		});
 		const uuidResult: { chatId: string } = await result.json();
 
+		invalidate('chats:list');
 		goto(resolve(`/${uuidResult.chatId}`));
 	}
 

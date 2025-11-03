@@ -1,8 +1,9 @@
 import { PUBLIC_BASE_URL } from '$env/static/public';
 
-export const load = async ({ platform }) => {
+export const load = async ({ platform, depends }) => {
 	try {
 		const res = await platform?.env.WS.fetch(PUBLIC_BASE_URL + '/list');
+		depends('chats:list');
 		if (!res) {
 			console.error('platform unavailable', res);
 			return { chats: [] };
