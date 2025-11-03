@@ -1,15 +1,38 @@
 # cf_ai_chat
+This project is a collaborative AI chat demo, like ChatGPT, but where multiple users can interact with the session at the same time, seeing other's edits to the input field and to the chat history and generation in real-time.
+It uses Automerge for it's nice text CRDT implementation, Cloudflare Durable Objects and WebSockets for real-time scalable communication, Cloudflare Workers KV for conversation listing, Workers AI for actually generating the text, GitHub actions for CI and SvelteKit for the frontend.
 
+It was nice to actually use Automerge and Durable Objects in a project, both of which I wanted to learn, but had no real use case for before.
+
+## LLM Code assistance
+This project had a small chunk of it's code written using GitHub Copilot's tab completion, and no code written using Agent mode or similar as I wanted to actually learn the technologies I hadn't used before myself.
+Agent mode was used to write the github actions workflow as I have written a lot of those before.
+
+
+The project is split into two services: the frontend web app and the Durable Object backend.
+
+## Testing the deployed version
+You can test the deployed version at https://chat.tteles.dev
+
+## To run locally
 To install dependencies:
 
 ```bash
-bun install
+npm install
 ```
 
 To run:
 
 ```bash
-bun run index.ts
+npm run dev --workspace=packages/web & npm run dev --workspace=packages/durable-object
 ```
 
-This project was created using `bun init` in bun v1.3.1. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+After setting up wrangler with your CF account, the web UI will be available at http://localhost:5173
+This is necessary because of the LLM usage.
+
+
+## Possible Improvements
+There's a few things I would do if I had more time:
+ - Using CF PubSub for broadcasting the new Rooms in real time (and perhaps the number of users in each room)
+ - Using zod on all inputs
+ - Separating types to a shared package

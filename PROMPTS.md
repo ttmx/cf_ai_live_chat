@@ -1,0 +1,1 @@
+pls add CI using github actions so I only have to provide it with a CLOUDFLARE_API_TOKEN secret
