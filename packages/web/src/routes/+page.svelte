@@ -3,14 +3,18 @@
 	import { resolve } from '$app/paths';
 	import { PUBLIC_BASE_URL } from '$env/static/public';
 	import * as InputGroup from '$lib/components/ui/input-group';
+    import { localChats } from '$lib/index.svelte';
 	import SendHorizontalIcon from '@lucide/svelte/icons/send-horizontal';
 	import { onMount } from 'svelte';
 
 	let textareaValue = $state('');
 	let textarea: HTMLTextAreaElement| null = null;
+	let submitting = $state(false);
 
 	async function submitFirstMessage() {
 		if (textareaValue.trim() === '') return;
+		if (submitting) return;
+		submitting = true;
 		let result = await fetch(`${PUBLIC_BASE_URL}/new`, {
 			method: 'POST',
 			headers: {
@@ -20,8 +24,12 @@
 		});
 		const uuidResult: { chatId: string } = await result.json();
 
-		invalidate('chats:list');
-		goto(resolve(`/${uuidResult.chatId}`));
+		localChats.push({
+			chatId: uuidResult.chatId,
+			startText: textareaValue,
+		});
+
+		await goto(resolve(`/${uuidResult.chatId}`));
 	}
 
 	onMount(() => {

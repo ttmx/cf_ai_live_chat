@@ -38,3 +38,6 @@ export type UserWSMessage = {
 export type SharedDoc = {
 	userInput: string;
 };
+
+
+export let localChats = $state<Array<{ chatId: string; startText: string }>>([]);

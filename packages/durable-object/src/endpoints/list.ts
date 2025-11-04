@@ -2,6 +2,7 @@ import { OpenAPIRoute, Str } from 'chanfana';
 import { env } from 'cloudflare:workers';
 import { z } from 'zod';
 import { type AppContext } from '../types';
+import { start } from 'repl';
 
 export class ListRoute extends OpenAPIRoute {
 	schema = {
@@ -27,15 +28,21 @@ export class ListRoute extends OpenAPIRoute {
 		// Get validated data
 		const { keys } = await env.KV.list();
 
-		return keys.map(k => {
+		let chats =  keys.map(k => {
 			const metadata = k.metadata;
 			if (typeof metadata !== 'object' || metadata === null) return null;
 			if (!('startText' in metadata)) return null;
+			if (!('startDateMs' in metadata)) return null;
 
 			return {
 				chatId: k.name,
 				startText: metadata.startText,
+				startDateMs: metadata.startDateMs,
 			};
-		}).filter(v => v !== null);
+		}).filter(v => v !== null).sort((a, b) => {
+			return (b!.startDateMs as number) - (a!.startDateMs as number);
+		});
+		console.log('Listing chats:', chats);
+		return chats;
 	}
 }

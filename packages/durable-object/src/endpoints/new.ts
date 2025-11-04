@@ -53,8 +53,10 @@ export class NewRoute extends OpenAPIRoute {
 				// plus this makes sure it doesn't exceed the 1024 byte limit
 				// because 100 * 4 (max bytes per utf8 char) is in fact less than 1024
 				startText: message.slice(0, 100),
+				startDateMs: Date.now(),
 			},
 		});
+		console.log('Created new conversation with ID:', uuid);
 
 		const hibernationDO = env.WEBSOCKET_HIBERNATION_SERVER.get(hibernationDOId);
 

@@ -3,12 +3,22 @@
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import { page } from '$app/state';
+    import { localChats } from '$lib/index.svelte';
 
 	let { children, data } = $props();
-	let chats = data.chats.map(chat => ({
-		title: chat.startText,
-		url: `${chat.chatId}`,
-	}));
+	let chats = $derived(
+		Array.from(
+			new Map(
+				localChats.concat(data.chats).map(chat => [
+					chat.chatId,
+					{
+						title: chat.startText,
+						url: `${chat.chatId}`,
+					}
+				])
+			).values()
+		)
+	);
 </script>
 
 <Sidebar.Provider>
