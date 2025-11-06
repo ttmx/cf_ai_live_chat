@@ -4,11 +4,6 @@ It uses Automerge for it's nice text CRDT implementation, Cloudflare Durable Obj
 
 It was nice to actually use Automerge and Durable Objects in a project, both of which I wanted to learn, but had no real use case for before.
 
-## LLM Code assistance
-This project had a small chunk of it's code written using GitHub Copilot's tab completion, and no code written using Agent mode or similar as I wanted to actually learn the technologies I hadn't used before myself.
-Agent mode was used to write the github actions workflow as I have written a lot of those before.
-
-
 The project is split into two services: the frontend web app and the Durable Object backend.
 
 ## Testing the deployed version
